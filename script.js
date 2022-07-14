@@ -1,6 +1,6 @@
 import QuadTree from "./QuadTree.js"
 
-const CURSOR_RADIUS = 100
+const CURSOR_RADIUS = 300
 
 const canvas = document.querySelector('canvas')
 if(!canvas)
@@ -13,33 +13,53 @@ const ctx = canvas.getContext('2d')
 if(!ctx)
 	throw new Error('No context found')
 
+
+const form = document.querySelector('form')
+if(!form)
+	throw new Error('No form found')
+
 const numberOfPoints = Math.round(Math.sqrt(window.innerWidth * window.innerHeight))
 
-start(ctx, numberOfPoints)
+start(ctx, numberOfPoints, form)
 
-async function start(ctx, count) {
+async function start(ctx, count, form) {
+	const formData = ui(form)
 	const points = Array(count).fill(0).map((_,id) => ({
 		id,
 		x: Math.random() * ctx.canvas.width,
 		y: Math.random() * ctx.canvas.height,
 		xSpeed: Math.random() * 2 - 1,
 		ySpeed: Math.random() * 2 - 1,
+		r: Math.random() * 2 + 1
 	}))
 	const tree = new QuadTree(0, 0, ctx.canvas.width, ctx.canvas.height)
 	points.forEach(point => tree.insert(point))
 	const mousePos = {
 		x: 200,
 		y: 200,
-		width: CURSOR_RADIUS * 2,
-		height: CURSOR_RADIUS * 2,
+		r: CURSOR_RADIUS,
 	}
 	const world = {
 		points,
 		tree,
 		mousePos,
+		formData,
 	}
 	trackMousePos(ctx, world.mousePos)
 	loop(ctx, world)
+}
+
+function ui(form) {
+	function getFormData(form) {
+		return {
+			geometry: form.elements.geometry.checked,
+		}
+	}
+	const formData = getFormData(form)
+	form.addEventListener('input', () => {
+		Object.assign(formData, getFormData(form))
+	})
+	return formData
 }
 
 function trackMousePos(ctx, mousePos) {
@@ -72,26 +92,50 @@ function update(ctx, world) {
 			point.ySpeed *= -1
 		}
 	})
-	const quadrants = world.tree.filter(
+	const candidates = world.tree.filter(
 		(quadrant) => rectCircleOverlap(quadrant, world.mousePos)
 	)
-	const points = quadrants
-		.reduce(
-			(points, quadrant) => (points.push(...quadrant.getBranchObjects()), points), []
-		)
+	const points = candidates
 		.filter(
-			point => Math.hypot(point.x - world.mousePos.x, point.y - world.mousePos.y) < world.mousePos.width / 2
+			point => Math.hypot(point.x - world.mousePos.x, point.y - world.mousePos.y) < world.mousePos.r
 		)
-	return {quadrants, points}
+	return {points, candidates}
 }
 
 function draw(ctx, world, data) {
 	ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height)
-	data.quadrants.forEach(quadrant => drawQuadrant(ctx, quadrant))
-	drawTree(ctx, world.tree)
-	drawPoints(ctx, world.points)
+	if (world.formData.geometry) {
+		drawTree(ctx, world.tree)
+		drawPoints(ctx, world.points)
+	}
+	drawPoints(ctx, data.candidates, '#808')
 	drawPoints(ctx, data.points, '#0f0')
-	drawMouse(ctx, world.mousePos)
+	if (world.formData.geometry) {
+		drawMouse(ctx, world.mousePos)
+	}
+	drawConnections(ctx, data.points, world.tree)
+}
+
+function drawConnections(ctx, points, tree) {
+	const distance = 60
+	ctx.save()
+	points.forEach(point => {
+		tree
+			.filter(
+				(quadrant) => rectCircleOverlap(quadrant, {...point, r: distance})
+			)
+			.filter(
+				neighbor => Math.hypot(neighbor.x - point.x, neighbor.y - point.y) < distance
+			)
+			.forEach(neighbor => {
+				ctx.strokeStyle = `rgba(80,0,80,${Math.hypot(neighbor.x - point.x, neighbor.y - point.y) / distance / 2})`
+				ctx.beginPath()
+				ctx.moveTo(point.x, point.y)
+				ctx.lineTo(neighbor.x, neighbor.y)
+				ctx.stroke()
+			})
+	})
+	ctx.restore()
 }
 
 function rectCircleOverlap(rect, circle) {
@@ -99,14 +143,18 @@ function rectCircleOverlap(rect, circle) {
 	const x = Math.max(rect.x, Math.min(circle.x, rect.x + rect.width))
 	const y = Math.max(rect.y, Math.min(circle.y, rect.y + rect.height))
 
-	return Math.hypot(x - circle.x, y - circle.y) <= circle.width / 2
+	const dx = x - circle.x
+	const dy = y - circle.y
+	const r = circle.r
+
+	return dx**2 + dy**2 <= r**2
 }
 
 function drawMouse(ctx, mousePos) {
 	ctx.save()
 	ctx.strokeStyle = '#0f0'
 	ctx.beginPath()
-	ctx.arc(mousePos.x, mousePos.y, mousePos.width / 2, 0, Math.PI * 2)
+	ctx.arc(mousePos.x, mousePos.y, mousePos.r, 0, Math.PI * 2)
 	ctx.stroke()
 	ctx.restore()
 }
@@ -116,7 +164,7 @@ function drawPoints(ctx, points, color = '#f00') {
 	ctx.fillStyle = color
 	points.forEach(point => {
 		ctx.beginPath()
-		ctx.arc(point.x, point.y, 2, 0, Math.PI * 2)
+		ctx.arc(point.x, point.y, point.r, 0, Math.PI * 2)
 		ctx.fill()
 	})
 	ctx.restore()

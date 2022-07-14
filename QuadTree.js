@@ -34,6 +34,10 @@ export default class QuadTree {
 			new QuadTree(x, y + subHeight, subWidth, subHeight, this, this.depth + 1),
 			new QuadTree(x + subWidth, y + subHeight, subWidth, subHeight, this, this.depth + 1),
 		]
+		this.objects.forEach(obj => {
+			this.insert(obj)
+		})
+		this.objects = []
 	}
 
 	#getIndex(obj) {
@@ -99,14 +103,6 @@ export default class QuadTree {
 		return objects
 	}
 
-	getBranchObjects() {
-		const objects = [...this.objects]
-		if (this.parent) {
-			objects.push(...this.parent.getBranchObjects())
-		}
-		return objects
-	}
-
 	contains(obj) {
 		return obj.x >= this.x
 			&& obj.x <= this.x + this.width
@@ -114,17 +110,17 @@ export default class QuadTree {
 			&& obj.y <= this.y + this.height
 	}
 
-	filter(callback, quadrants = []) {
+	filter(callback, objects = []) {
 		if(!this.nodes.length) {
-			quadrants.push(this)
-			return quadrants
+			objects.push(...this.objects)
+			return objects
 		}
 		this.nodes.forEach(node => {
 			if (callback(node)) {
-				node.filter(callback, quadrants)
+				node.filter(callback, objects)
 			}
 		})
-		return quadrants
+		return objects
 	}
 
 }

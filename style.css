@@ -9,3 +9,14 @@ canvas {
 	width: 100vw;
 	height: var(--svh, 100vh);
 }
+
+form {
+	position: fixed;
+	top: 1em;
+	left: 1em;
+}
+
+label {
+	display: block;
+	margin: .5em 0;
+}
