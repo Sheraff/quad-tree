@@ -18,7 +18,7 @@ const form = document.querySelector('form')
 if(!form)
 	throw new Error('No form found')
 
-const numberOfPoints = Math.round(Math.sqrt(window.innerWidth * window.innerHeight))
+const numberOfPoints = 2 * Math.round(Math.sqrt(window.innerWidth * window.innerHeight))
 
 start(ctx, numberOfPoints, form)
 

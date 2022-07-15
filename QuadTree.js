@@ -3,7 +3,7 @@ export default class QuadTree {
 	/** @typedef {{x: number, y: number}} Entity */
 
 	static MAX_OBJECTS = 4
-	static MAX_DEPTH = 6
+	static MAX_DEPTH = Infinity
 
 	/** @type {WeakMap<T & Entity, QuadTree<T>>} */
 	#objectQuadrantMap
@@ -99,7 +99,7 @@ export default class QuadTree {
 	}
 
 	get length() {
-		return this.objects.size + this.nodes?.reduce((acc, node) => acc + node.length, 0)
+		return this.objects.size + (!this.nodes ? 0 : this.nodes.reduce((acc, node) => acc + node.length, 0))
 	}
 
 	collectChildrenObjects(set = this.objects) {
