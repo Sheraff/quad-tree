@@ -32,6 +32,7 @@ async function start(ctx, count, form) {
 		ySpeed: Math.random() * 2 - 1,
 		r: Math.random() * 2 + 1
 	}))
+	/** @type {QuadTree<typeof points[0]>} */
 	const tree = new QuadTree(0, 0, ctx.canvas.width, ctx.canvas.height)
 	points.forEach(point => tree.insert(point))
 	const mousePos = {
@@ -176,7 +177,7 @@ function drawTree(ctx, tree) {
 	ctx.beginPath()
 	ctx.rect(tree.x, tree.y, tree.width, tree.height)
 	ctx.stroke()
-	if(tree.nodes.length) {
+	if(tree.nodes) {
 		tree.nodes.forEach(node => {
 			drawTree(ctx, node)
 		})

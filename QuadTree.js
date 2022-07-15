@@ -1,26 +1,36 @@
+/** @template T */
 export default class QuadTree {
+	/** @typedef {{x: number, y: number}} Entity */
+
 	static MAX_OBJECTS = 4
 	static MAX_DEPTH = 6
-	static CURRENT_QUADRANT = Symbol()
+
+	/** @type {WeakMap<T & Entity, QuadTree<T>>} */
+	#objectQuadrantMap
+
+	/** @type {null | [QuadTree<T>, QuadTree<T>, QuadTree<T>, QuadTree<T>]} */
+	nodes = null
+
+	/** @type {Set<T & Entity>} */
+	objects = new Set()
 
 	/**
-	 * 
 	 * @param {number} x 
 	 * @param {number} y 
 	 * @param {number} width 
 	 * @param {number} height 
-	 * @param {undefined | QuadTree} parent 
-	 * @param {undefined | number} depth 
+	 * @param {QuadTree} [parent]
+	 * @param {number} [depth]
+	 * @param {WeakMap<T & Entity, QuadTree<T>>} [objectQuadrantMap]
 	 */
-	constructor(x, y, width, height, parent = undefined, depth = 0) {
+	constructor(x, y, width, height, parent = undefined, depth = 0, objectQuadrantMap = new WeakMap()) {
 		this.x = x
 		this.y = y
 		this.width = width
 		this.height = height
-		this.objects = []
-		this.nodes = []
 		this.parent = parent
 		this.depth = depth
+		this.#objectQuadrantMap = objectQuadrantMap
 	}
 
 	#split() {
@@ -29,51 +39,48 @@ export default class QuadTree {
 		const x = this.x
 		const y = this.y
 		this.nodes = [
-			new QuadTree(x, y, subWidth, subHeight, this, this.depth + 1),
-			new QuadTree(x + subWidth, y, subWidth, subHeight, this, this.depth + 1),
-			new QuadTree(x, y + subHeight, subWidth, subHeight, this, this.depth + 1),
-			new QuadTree(x + subWidth, y + subHeight, subWidth, subHeight, this, this.depth + 1),
+			new QuadTree(x, y, subWidth, subHeight, this, this.depth + 1, this.#objectQuadrantMap),
+			new QuadTree(x + subWidth, y, subWidth, subHeight, this, this.depth + 1, this.#objectQuadrantMap),
+			new QuadTree(x, y + subHeight, subWidth, subHeight, this, this.depth + 1, this.#objectQuadrantMap),
+			new QuadTree(x + subWidth, y + subHeight, subWidth, subHeight, this, this.depth + 1, this.#objectQuadrantMap),
 		]
-		this.objects.forEach(obj => {
-			this.insert(obj)
-		})
-		this.objects = []
+		this.objects.forEach(obj => this.insert(obj))
+		this.objects.clear()
 	}
 
+	/** @param {T & Entity} obj */
 	#getIndex(obj) {
 		const indexX = obj.x > this.x + this.width / 2
 		const indexY = obj.y > this.y + this.height / 2
 		return +indexX + +indexY * 2
 	}
 
+	/** @param {T & Entity} obj */
 	insert(obj) {
-		if(this.nodes.length) {
+		if(this.nodes) {
 			const index = this.#getIndex(obj)
 			this.nodes[index].insert(obj)
 			return
 		}
-		this.objects.push(obj)
-		obj[QuadTree.CURRENT_QUADRANT] = this
-		if(this.objects.length >= QuadTree.MAX_OBJECTS && this.depth < QuadTree.MAX_DEPTH) {
+		this.objects.add(obj)
+		this.#objectQuadrantMap.set(obj, this)
+		if(this.objects.size >= QuadTree.MAX_OBJECTS && this.depth < QuadTree.MAX_DEPTH) {
 			this.#split()
 		}
 	}
 
+	/** @param {T & Entity} obj */
 	displace(obj) {
-		const quadrant = obj[QuadTree.CURRENT_QUADRANT]
-		if(quadrant && !quadrant.contains(obj)) {
+		const quadrant = this.#objectQuadrantMap.get(obj)
+		if(quadrant && !quadrant.isWithinBounds(obj)) {
 			quadrant.remove(obj)
 			this.insert(obj)
 		}
 	}
 
-
+	/** @param {T & Entity} obj */
 	remove(obj) {
-		const index = this.objects.indexOf(obj)
-		// if(index === -1) {
-		// 	throw new Error('Object not found')
-		// }
-		this.objects.splice(index, 1)
+		this.objects.delete(obj)
 		if (this.length < QuadTree.MAX_OBJECTS) {
 			this.merge()
 		}
@@ -84,34 +91,43 @@ export default class QuadTree {
 			this.parent.merge()
 			return
 		}
-		if (this.nodes.length) {
-			this.objects = this.getObjects()
-			this.objects.forEach(obj => obj[QuadTree.CURRENT_QUADRANT] = this)
-			this.nodes = []
+		if (this.nodes) {
+			this.collectChildrenObjects()
+			this.objects.forEach(obj => this.#objectQuadrantMap.set(obj, this))
+			this.nodes = null
 		}
 	}
 
 	get length() {
-		return this.objects.length + this.nodes.reduce((acc, node) => acc + node.length, 0)
+		return this.objects.size + this.nodes?.reduce((acc, node) => acc + node.length, 0)
 	}
 
-	getObjects() {
-		const objects = [...this.objects]
-		this.nodes.forEach(node => {
-			objects.push(...node.getObjects())
+	collectChildrenObjects(set = this.objects) {
+		if (set !== this.objects) {
+			this.objects.forEach(obj => set.add(obj))
+		}
+		this.nodes?.forEach(node => {
+			node.collectChildrenObjects(set)
 		})
-		return objects
 	}
 
-	contains(obj) {
+	/**
+	 * @template U
+	 * @param {U & Entity} obj
+	 */
+	isWithinBounds(obj) {
 		return obj.x >= this.x
 			&& obj.x <= this.x + this.width
 			&& obj.y >= this.y
 			&& obj.y <= this.y + this.height
 	}
 
+	/**
+	 * @param {(node: QuadTree<T>) => boolean} callback
+	 * @param {Array<T & Entity>} objects
+	 */
 	filter(callback, objects = []) {
-		if(!this.nodes.length) {
+		if(!this.nodes) {
 			objects.push(...this.objects)
 			return objects
 		}
